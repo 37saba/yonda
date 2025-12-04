@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>yonda?β</title>
+<style>
+  :root{
+    --toolbar-bg:#f5f5f7; --btn-bg:#0b76d1; --btn-active:#ff6f00;
+  }
+  html,body{height:100%;margin:0;font-family:system-ui,"Yu Gothic",sans-serif}
+  .toolbar{background:var(--toolbar-bg);padding:8px;display:flex;gap:8px;align-items:center;border-bottom:1px solid #ddd;flex-wrap:wrap;z-index:3000}
+  .toolbar label{display:flex;align-items:center;gap:6px;font-size:14px}
+  button{padding:8px 12px;border-radius:6px;border:0;background:var(--btn-bg);color:#fff;cursor:pointer}
+  button.active{background:var(--btn-active)}
+  input[type=color]{width:36px;height:28px;border:0;background:transparent;cursor:pointer}
+  input[type=number]{width:64px}
+  .app{display:flex;flex-direction:column;height:calc(100% - 56px)}
+  .canvas-wrap{flex:1;position:relative;overflow:hidden;background:#fff}
+  /* Canvas is visually below text overlay but above background */
+  canvas{position:absolute;left:0;top:0;width:100%;height:100%;touch-action:none;z-index:1;background:transparent}
+  /* Text overlay sits on top, pointer-events:none so drawing still works */
+  .text-overlay{position:absolute;inset:0;padding:20px;box-sizing:border-box;writing-mode:vertical-rl;text-orientation:upright;overflow:auto;z-index:20;pointer-events:none}
+  .text-overlay .paper{background:transparent;color:#222}
+  /* sticky */
+  .sticky{position:absolute;z-index:30;display:flex;flex-direction:column;border-radius:8px;box-shadow:0 6px 14px rgba(0,0,0,0.12);min-width:120px;min-height:80px;overflow:hidden;background:#fff475;user-select:none;cursor:grab}
+  .sticky.selected{outline:3px solid rgba(0,120,215,0.5)}
+  .sticky-header{display:flex;justify-content:flex-end;align-items:center;gap:6px;padding:6px 8px;background:transparent}
+  .sticky-controls button{color:black;font-weight:bold;-webkit-text-stroke:1px white;background:rgba(255,255,255,0.75);border:1px solid rgba(0,0,0,0.12);border-radius:4px;padding:2px 6px;cursor:pointer}
+  .sticky-content{padding:8px;font-size:14px;background:transparent;flex:1;overflow:auto;outline:none;min-height:40px;color:#000}
+  .resize-handle{position:absolute;right:6px;bottom:6px;width:16px;height:16px;border-radius:3px;background:rgba(0,0,0,0.15);cursor:se-resize;z-index:60}
+  .hidden{opacity:0;pointer-events:none}
+  @media(max-width:700px){.text-overlay{width:40%}}
+/* ふせんスタイル */
+.sticky-note{
+  position:absolute;
+  border-radius:8px;
+  box-shadow:0 6px 14px rgba(0,0,0,0.12);
+  overflow:visible;
+  user-select:none;
+  min-width:60px;
+  min-height:40px;
+  z-index:3000;
+}
+.sticky-header{
+  display:flex;
+  justify-content:flex-end;
+  gap:6px;
+  align-items:center;
+  padding:6px 8px;
+  cursor:grab;
+  background:transparent;
+}
+.sticky-toggle, .sticky-close {
+  background:rgba(255,255,255,0.8);
+  border:1px solid rgba(0,0,0,0.12);
+  border-radius:4px;
+  padding:2px 6px;
+  cursor:pointer;
+}
+.sticky-content{
+  padding:8px;
+  font-size:14px;
+  min-height:40px;
+  background:transparent;
+  outline:none;
+}
+/* ---- Sticky minimized vertical-bar style (color = sticky color) ---- */
+.sticky.minimized {
+  width: 6px !important;
+  min-width: 6px !important;
+  resize: none !important;
+  padding: 0 !important;
+  border-radius: 3px;
+  background: var(--sticky-color, #ccc) !important;
+  overflow: hidden !important;
+  cursor: pointer;
+  pointer-events: auto !important;
+}
+
+/* 子要素は全部非表示 */
+.sticky.minimized textarea,
+.sticky.minimized .sticky-header,
+.sticky.minimized .sticky-color-picker,
+.sticky.minimized .sticky-delete {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+/* resize handle */
+.sticky-resize{
+  position:absolute;
+  right:6px;
+  bottom:6px;
+  width:16px;
+  height:16px;
+  border-radius:3px;
+  background:rgba(0,0,0,0.15);
+  cursor:se-resize;
+  z-index:4000;
+}
+
+/* minimized: 縦棒表示 */
+.sticky-note.minimized {
+  width: 14px !important;
+  height: 80px !important;
+  min-width: 14px !important;
+  min-height: 80px !important;
+  padding: 0 !important;
+  overflow: hidden;
+}
+.sticky-note.minimized .sticky-header { height:100%; display:block; padding:0; }
+.sticky-note.minimized .sticky-toggle {
+  width:100%;
+  height:100%;
+  writing-mode:vertical-rl;
+  text-orientation:upright;
+  display:block;
+  padding:0;
+  border-radius:4px;
+}
+.sticky-note.minimized .sticky-content { display:none !important; }
+
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <button id="penBtn" class="active"> ペン</button>
+  <button id="eraserBtn"> 消しゴム</button>
+
+  <label>色: <input type="color" id="penColor" value="#222222"></label>
+  <label>太さ: <input id="penSize" type="range" min="1" max="40" value="5"></label>
+  <label><input id="sizeNumber" type="number" min="1" max="80" value="5" /> px</label>
+
+  <div style="width:1px;background:#ddd;height:28px;margin:0 8px"></div>
+
+  <label>ふせん色: <input type="color" id="stickyBgColor" value="#fff475"></label>
+  <label>文字色: <input type="color" id="stickyTextColor" value="#000000"></label>
+  <label>初期: <select id="stickyInitSize"><option value="140">小</option><option value="180" selected>中</option><option value="240">大</option></select></label>
+  <button id="addStickyBtn"> ふせん追加</button>
+
+  <div style="flex:1"></div>
+
+  <button id="clearBtn"> 全消去</button>
+  <!-- トグルボタンが DOM に無かったので追加（以前のコードで参照されていたため） -->
+  <button id="toggleMemoBtn">メモ非表示</button>
+</div>
+
+<div class="app">
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="canvas"></canvas>
+
+    <!-- 文章オーバーレイ（固定文・編集不可） -->
+    <div class="text-overlay" id="textOverlay">
+      <div class="paper" id="paper" contenteditable="false">
+       <h3>吾輩は猫である</h3>
+        <p>
+         吾輩は猫である。名前はまだ無い。
+　どこで生れたかとんと見当がつかぬ。何でも薄暗いじめじめした所でニャーニャー泣いていた事だけは記憶している。吾輩はここで始めて人間というものを見た。しかもあとで聞くとそれは書生という人間中で一番獰悪な種族であったそうだ。この書生というのは時々我々を捕まえて煮て食うという話である。しかしその当時は何という考もなかったから別段恐しいとも思わなかった。ただ彼の掌に載せられてスーと持ち上げられた時何だかフワフワした感じがあったばかりである。掌の上で少し落ちついて書生の顔を見たのがいわゆる人間というものの見始であろう。この時妙なものだと思った感じが今でも残っている。第一毛をもって装飾されべきはずの顔がつるつるしてまるで薬缶だ。その後猫にもだいぶ逢ったがこんな片輪には一度も出会わした事がない。のみならず顔の真中があまりに突起している。そうしてその穴の中から時々ぷうぷうと煙けむりを吹く。どうも咽せぽくて実に弱った。これが人間の飲む煙草というものである事はようやくこの頃知った。
+　この書生の掌の裏でしばらくはよい心持に坐っておったが、しばらくすると非常な速力で運転し始めた。書生が動くのか自分だけが動くのか分らないが無暗に眼が廻る。胸が悪くなる。到底助からないと思っていると、どさりと音がして眼から火が出た。それまでは記憶しているがあとは何の事やらいくら考え出そうとしても分らない。
+　ふと気が付いて見ると書生はいない。たくさんおった兄弟が一疋も見えぬ。肝心かんじんの母親さえ姿を隠してしまった。その上今までの所とは違って無暗むやみに明るい。眼を明いていられぬくらいだ。はてな何でも容子がおかしいと、のそのそ這い出して見ると非常に痛い。吾輩は藁わらの上から急に笹原の中へ棄てられたのである。
+       </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase CDN (Realtime Database, Auth) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<script>
+/* ---------------------------
+   Firebase config - 
+----------------------------*/
+const firebaseConfig = {
+  apiKey: "AIzaSyDZ2UDYp0iMp-9MtXk-HuoIsy6jcPCAHBw",
+  authDomain: "yonda-3f85f.firebaseapp.com",
+  databaseURL: "https://yonda-3f85f-default-rtdb.firebaseio.com",
+  projectId: "yonda-3f85f",
+  storageBucket: "yonda-3f85f.firebasestorage.app",
+  messagingSenderId: "299265439268",
+  appId: "1:299265439268:web:9667b9cb0f4d0f2ede8ab1",
+  measurementId: "G-MGZD9YFWPT"
+};
+
+firebase.initializeApp(firebaseConfig);
+firebase.auth().signInAnonymously().catch(e=>console.error("anon login failed", e));
+const rtdb = firebase.database();
+
+/* ---------------------------
+   DOM & UI state
+----------------------------*/
+const canvas = document.getElementById('canvas');
+const canvasWrap = document.getElementById('canvasWrap');
+const ctx = canvas.getContext('2d');
+
+const penBtn = document.getElementById('penBtn');
+const eraserBtn = document.getElementById('eraserBtn');
+const penColorInput = document.getElementById('penColor');
+const penSizeInput = document.getElementById('penSize');
+const sizeNumber = document.getElementById('sizeNumber');
+
+const stickyBgInput = document.getElementById('stickyBgColor');
+const stickyTextInput = document.getElementById('stickyTextColor');
+const stickyInitSize = document.getElementById('stickyInitSize');
+const addStickyBtn = document.getElementById('addStickyBtn');
+const toggleMemoBtn = document.getElementById('toggleMemoBtn');
+const clearBtn = document.getElementById('clearBtn');
+
+const textOverlay = document.getElementById('textOverlay');
+textOverlay.style.pointerEvents = 'none'; // ensure canvas interactions work
+
+let mode = 'pen'; // 'pen' | 'eraser'
+penBtn.addEventListener('click', ()=>{ mode='pen'; penBtn.classList.add('active'); eraserBtn.classList.remove('active'); });
+eraserBtn.addEventListener('click', ()=>{ mode='eraser'; eraserBtn.classList.add('active'); penBtn.classList.remove('active'); });
+
+penSizeInput.addEventListener('input', ()=> sizeNumber.value = penSizeInput.value);
+sizeNumber.addEventListener('input', ()=>{ const v = Number(sizeNumber.value); if(!isNaN(v) && v>0){ penSizeInput.value = v; } });
+
+/* ---------------------------
+   Stroke storage (normalized) & drawing
+   - store segments normalized to CSS px (0..1)
+   - redraw scales to current CSS size
+----------------------------*/
+let strokes = []; // array of {id, mode, color, size (css px), segments: [{x1,y1,cx,cy,x2,y2}], time}
+const STROKE_LS_KEY = 'memoStrokes_v1';
+
+// unique id
+function uid(){ return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8); }
+
+function localSaveStrokes(){ try{ localStorage.setItem(STROKE_LS_KEY, JSON.stringify(strokes)); }catch(e){console.warn(e);} }
+function localLoadStrokes(){ try{ const raw = localStorage.getItem(STROKE_LS_KEY); return raw?JSON.parse(raw):[]; }catch(e){ return []; } }
+
+/* canvas sizing & DPR-aware backing buffer */
+function resizeCanvas(){
+  const rect = canvasWrap.getBoundingClientRect();
+  const cssW = Math.max(1, Math.round(rect.width));
+  const cssH = Math.max(1, Math.round(rect.height));
+  const dpr = window.devicePixelRatio || 1;
+
+  canvas.style.width = cssW + 'px';
+  canvas.style.height = cssH + 'px';
+
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+
+  // set transform so 1 CSS px = 1 unit in drawing commands
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  // redraw (text is DOM overlay, so only strokes are drawn here)
+  redrawAll();
+}
+window.addEventListener('resize', resizeCanvas);
+new ResizeObserver(resizeCanvas).observe(canvasWrap);
+resizeCanvas();
+
+/* draw a single stroke (use CSS px coords by scaling segment * cssW/cssH) */
+function drawStrokeOnCanvas(stroke){
+  if(!stroke || !stroke.segments) return;
+  const rect = canvas.getBoundingClientRect();
+  const cssW = rect.width, cssH = rect.height;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = (stroke.size || 2); // because ctx.setTransform maps CSS px
+  if(stroke.mode === 'pen'){ ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = stroke.color || '#222'; }
+  else { ctx.globalCompositeOperation = 'destination-out'; ctx.strokeStyle = 'rgba(0,0,0,1)'; }
+  for(const seg of stroke.segments){
+    ctx.beginPath();
+    ctx.moveTo(seg.x1 * cssW, seg.y1 * cssH);
+    ctx.quadraticCurveTo(seg.cx * cssW, seg.cy * cssH, seg.x2 * cssW, seg.y2 * cssH);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* Compatibility helper: draw simple straight line between two points (CSS px). */
+function drawLine(p1, p2){
+  if(!p1 || !p2) return;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = Number(penSizeInput.value) || 2;
+  ctx.globalCompositeOperation = (mode === 'pen') ? 'source-over' : 'destination-out';
+  ctx.strokeStyle = (mode === 'pen') ? penColorInput.value : 'rgba(0,0,0,1)';
+  ctx.beginPath();
+  ctx.moveTo(p1.x, p1.y);
+  ctx.lineTo(p2.x, p2.y);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function redrawAll(){
+  // clear backing (note: canvas.width/height are device pixels; ctx.setTransform maps to CSS px)
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  // draw strokes in order
+  for(const s of strokes) drawStrokeOnCanvas(s);
+}
+
+/* restore local strokes on load */
+strokes = localLoadStrokes() || [];
+setTimeout(()=> { resizeCanvas(); redrawAll(); }, 20);
+
+/* ---------- drawing input: smooth via midpoint quadratic ---------- */
+let isDrawing = false, prevPoint = null, prevMid = null, currentStroke = null;
+
+function getPos(e){
+  const r = canvas.getBoundingClientRect();
+  // support pointer events and touch
+  const p = (e.touches && e.touches[0]) ? e.touches[0] : e;
+  return { x: p.clientX - r.left, y: p.clientY - r.top };
+}
+function midpoint(a,b){ return { x:(a.x+b.x)/2, y:(a.y+b.y)/2 }; }
+
+function startDraw(e){
+  // pointer/touch start
+  e.preventDefault();
+  // capture pointer for more reliable move/up events
+  if(e.pointerId && canvas.setPointerCapture) canvas.setPointerCapture(e.pointerId);
+
+  isDrawing = true;
+  const p = getPos(e);
+  prevPoint = p; prevMid = p;
+  currentStroke = { id: uid(), mode: mode, color: mode==='pen'?penColorInput.value:null, size: Number(penSizeInput.value), segments: [], time: Date.now() };
+}
+function moveDraw(e){
+  if(!isDrawing || !currentStroke) return;
+  const p = getPos(e);
+  const mid = midpoint(prevPoint, p);
+
+  // immediate UX draw (CSS px coords)
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.lineWidth = Number(penSizeInput.value);
+  if(mode === 'pen'){ ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = penColorInput.value; }
+  else { ctx.globalCompositeOperation = 'destination-out'; }
+  ctx.beginPath();
+  ctx.moveTo(prevMid.x, prevMid.y);
+  ctx.quadraticCurveTo(prevPoint.x, prevPoint.y, mid.x, mid.y);
+  ctx.stroke();
+
+  // normalize segment (CSS basis 0..1)
+  const rect = canvas.getBoundingClientRect();
+  const cssW = rect.width, cssH = rect.height;
+  const seg = {
+    x1: prevMid.x / cssW,
+    y1: prevMid.y / cssH,
+    cx: prevPoint.x / cssW,
+    cy: prevPoint.y / cssH,
+    x2: mid.x / cssW,
+    y2: mid.y / cssH
+  };
+  currentStroke.segments.push(seg);
+
+  // send to DB (lightweight single-segment message)
+  try{
+    rtdb.ref('draw').set({
+      strokeId: currentStroke.id,
+      seg: seg,
+      color: currentStroke.color,
+      size: currentStroke.size,
+      mode: currentStroke.mode,
+      time: Date.now()
+    });
+  }catch(err){ console.warn('send draw failed', err); }
+
+  prevPoint = p; prevMid = mid;
+}
+function endDraw(e){
+  // release pointer capture
+  if(e && e.pointerId && canvas.releasePointerCapture) {
+    try{ canvas.releasePointerCapture(e.pointerId); }catch(_){} 
+  }
+  isDrawing = false;
+  if(currentStroke){
+    strokes.push(currentStroke);
+    localSaveStrokes();
+    currentStroke = null;
+  }
+  prevPoint = prevMid = null;
+}
+
+canvas.addEventListener('pointerdown', startDraw);
+canvas.addEventListener('pointermove', moveDraw);
+canvas.addEventListener('pointerup', endDraw);
+canvas.addEventListener('pointercancel', endDraw);
+canvas.addEventListener('pointerleave', endDraw);
+
+/* ---------- receive remote partial-segment messages and append to remote stroke ---------- */
+rtdb.ref('draw').on('value', snapshot => {
+  const d = snapshot.val();
+  if(!d || !d.seg) return;
+  // find or create stroke
+  let st = strokes.find(s => s.id === d.strokeId);
+  if(!st){
+    st = { id: d.strokeId || uid(), mode: d.mode || 'pen', color: d.color || '#222', size: d.size || 4, segments: [], time: d.time || Date.now() };
+    strokes.push(st);
+  }
+  st.segments.push(d.seg);
+  localSaveStrokes();
+  // throttle redraw a little
+  clearTimeout(window.__redrawTimer);
+  window.__redrawTimer = setTimeout(()=> redrawAll(), 6);
+});
+
+/* ---------------------------
+   Sticky (ふせん) system
+   - stored at rtdb.ref('notes/<id>')
+   - position saved normalized to CSS coords (0..1)
+----------------------------*/
+let zCounter = 1000;
+
+function normalizeSavedPosVal(val, axisSize, fallback){
+  if(val === undefined || val === null) return fallback || 40;
+  if(typeof val === 'number' && val > 0 && val <= 1) return Math.round(val * axisSize);
+  const n = Number(val);
+  if(!isNaN(n) && n > 0 && n <= 1) return Math.round(n * axisSize);
+  return parseInt(n || fallback || 40, 10);
+}
+
+function createSticky(saved){
+  const fromSync = saved?.fromSync || false;
+  const s = document.createElement('div');
+  const id = saved?.id || crypto.randomUUID();
+  s.dataset.stickyId = id;
+  s.className = 'sticky';
+  s.style.left = (normalizeSavedPosVal(saved?.left, canvasWrap.clientWidth, 40)) + 'px';
+  s.style.top  = (normalizeSavedPosVal(saved?.top, canvasWrap.clientHeight, 40)) + 'px';
+  s.style.width = (saved?.width ?? Number(stickyInitSize.value)) + 'px';
+  s.style.height = (saved?.height ?? Math.floor(Number(stickyInitSize.value) * 0.6)) + 'px';
+  s.style.background = saved?.color ?? stickyBgInput.value;
+  s.style.color = saved?.textColor ?? stickyTextInput.value;
+  s.style.zIndex = ++zCounter;
+
+  const header = document.createElement('div'); header.className = 'sticky-header';
+  const controls = document.createElement('div'); controls.className = 'sticky-controls';
+  controls.innerHTML = `<button class="minBtn">−</button><button class="closeBtn">×</button>`;
+  header.appendChild(controls);
+  s.appendChild(header);
+
+  const content = document.createElement('div'); content.className = 'sticky-content';
+  content.contentEditable = true;
+  content.innerHTML = saved?.text ?? '';
+  content.style.color = s.style.color;
+  s.appendChild(content);
+
+  const rh = document.createElement('div'); rh.className='resize-handle'; s.appendChild(rh);
+  canvasWrap.appendChild(s);
+
+  if(!fromSync && (!saved || !saved.id)){
+    rtdb.ref('notes/' + id).set({
+      left: (parseInt(s.style.left) || 0) / canvasWrap.clientWidth,
+      top: (parseInt(s.style.top) || 0) / canvasWrap.clientHeight,
+      width: s.offsetWidth,
+      height: s.offsetHeight,
+      color: s.style.background,
+      textColor: s.style.color,
+      text: content.innerHTML,
+      minimized: false,
+      createdAt: Date.now()
+    });
+  }
+
+  // sync text edits
+  content.addEventListener('input', ()=> {
+    rtdb.ref('notes/' + id).update({ text: content.innerHTML, lastUpdate: Date.now() });
+  });
+
+  // selection / z-index
+  s.addEventListener('pointerdown', (ev)=> {
+    if(ev.target.closest('.sticky-controls')) return;
+    ev.stopPropagation();
+    document.querySelectorAll('.sticky').forEach(x=>x.classList.remove('selected'));
+    s.classList.add('selected'); s.style.zIndex = ++zCounter;
+  });
+
+  // drag
+  let dragging=false, ox=0, oy=0;
+  header.addEventListener('pointerdown', (ev)=>{
+    if(ev.target.closest('.sticky-controls')) return;
+    ev.preventDefault();
+    dragging=true;
+    const rect = s.getBoundingClientRect();
+    ox = ev.clientX - rect.left; oy = ev.clientY - rect.top;
+    header.setPointerCapture && header.setPointerCapture(ev.pointerId);
+  });
+  document.addEventListener('pointermove', (ev)=>{
+    if(!dragging) return;
+    s.style.left = (ev.clientX - ox) + 'px';
+    s.style.top = (ev.clientY - oy) + 'px';
+  });
+  document.addEventListener('pointerup', (ev)=>{
+    if(dragging){ dragging=false;
+      rtdb.ref('notes/' + id).update({ left: parseInt(s.style.left)/canvasWrap.clientWidth, top: parseInt(s.style.top)/canvasWrap.clientHeight, lastUpdate: Date.now() });
+    }
+  });
+
+  // resize
+  let resizing=false, startW=0, startH=0, startX=0, startY=0;
+  rh.addEventListener('pointerdown', (ev)=>{ ev.preventDefault(); ev.stopPropagation(); resizing=true; startW=s.offsetWidth; startH=s.offsetHeight; startX=ev.clientX; startY=ev.clientY; rh.setPointerCapture && rh.setPointerCapture(ev.pointerId); });
+  document.addEventListener('pointermove', (ev)=>{ if(!resizing) return; const dx = ev.clientX - startX; const dy = ev.clientY - startY; s.style.width = Math.max(60, startW + dx) + 'px'; s.style.height = Math.max(30, startH + dy) + 'px'; });
+  document.addEventListener('pointerup', (ev)=>{ if(resizing){ resizing=false; rtdb.ref('notes/' + id).update({ width: s.offsetWidth, height: s.offsetHeight, lastUpdate: Date.now() }); } });
+
+  // minimize / close
+  // --- minimized strip click to restore ---
+  s.addEventListener('click', (ev) => {
+    // minimized の時だけ反応
+    if (!s.classList.contains('minimized')) return;
+
+    ev.stopPropagation();
+    s.classList.remove('minimized');
+
+    // 元サイズに戻す
+    const pw = s.dataset.prevWidth || (saved?.width + 'px') || '180px';
+    const ph = s.dataset.prevHeight || (saved?.height + 'px') || '110px';
+    s.style.width = pw;
+    s.style.height = ph;
+
+    rtdb.ref('notes/' + id).update({
+      minimized: false,
+      lastUpdate: Date.now()
+    });
+  });
+
+  controls.querySelector('.minBtn').addEventListener('click', (ev)=>{ ev.stopPropagation(); s.classList.toggle('minimized'); rtdb.ref('notes/' + id).update({ minimized: s.classList.contains('minimized'), lastUpdate: Date.now() }); });
+  controls.querySelector('.closeBtn').addEventListener('click', (ev)=>{ ev.stopPropagation(); rtdb.ref('notes/' + id).remove(); s.remove(); });
+
+  return s;
+}
+
+/* sticky DB listeners */
+rtdb.ref('notes').on('child_added', snap=>{
+  const id = snap.key; const data = snap.val();
+  if(document.querySelector(`[data-sticky-id="${id}"]`)) return;
+  const obj = { id:id, fromSync:true, left: data.left, top: data.top, width: data.width, height: data.height, color: data.color, textColor: data.textColor, text: data.text, minimized: data.minimized };
+  const s = createSticky(obj);
+  s.dataset.stickyId = id;
+});
+rtdb.ref('notes').on('child_changed', snap=>{
+  const id = snap.key, d = snap.val();
+  const s = document.querySelector(`[data-sticky-id="${id}"]`); if(!s) return;
+  if(d.left !== undefined) s.style.left = d.left * canvasWrap.clientWidth + 'px';
+  if(d.top !== undefined) s.style.top = d.top * canvasWrap.clientHeight + 'px';
+  if(d.width !== undefined) s.style.width = d.width + 'px';
+  if(d.height !== undefined) s.style.height = d.height + 'px';
+  if(d.color !== undefined) s.style.background = d.color;
+  const c = s.querySelector('.sticky-content');
+  if(d.textColor !== undefined) c.style.color = d.textColor;
+  if(d.text !== undefined) c.innerHTML = d.text;
+  if(d.minimized !== undefined) { if(d.minimized) s.classList.add('minimized'); else s.classList.remove('minimized'); }
+});
+rtdb.ref('notes').on('child_removed', snap=>{
+  const id = snap.key; const s = document.querySelector(`[data-sticky-id="${id}"]`); if(s) s.remove();
+});
+
+/* UI: add sticky */
+addStickyBtn.addEventListener('click', ()=> createSticky({}));
+
+/* toggle memos */
+let memoVisible = true;
+toggleMemoBtn.addEventListener('click', ()=>{
+  memoVisible = !memoVisible;
+  document.querySelectorAll('.sticky').forEach(s=> s.classList.toggle('hidden', !memoVisible));
+  toggleMemoBtn.textContent = memoVisible ? 'メモ非表示' : 'メモ表示';
+});
+
+/* clear */
+clearBtn.addEventListener('click', ()=>{
+  strokes = []; localSaveStrokes();
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  document.querySelectorAll('.sticky').forEach(s=>s.remove());
+  rtdb.ref('notes').remove().catch(()=>{});
+  rtdb.ref('draw').remove().catch(()=>{});
+});
+
+/* ---------- load local saved strokes on start ---------- */
+window.addEventListener('load', ()=>{
+  // make sure initial resize done
+  setTimeout(()=> { resizeCanvas(); redrawAll(); }, 50);
+});
+
+/* Prevent text overlay blocking pointer events on canvas: done earlier via pointer-events:none */
+/* End of script */
+</script>
+</body>
+</html>
