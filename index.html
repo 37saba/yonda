@@ -65,11 +65,10 @@
   background:transparent;
   outline:none;
 }
-/* ---- Sticky minimized vertical-bar style (color = sticky color) ---- */
+/* minimized */
 .sticky.minimized {
   width: 6px !important;
   min-width: 6px !important;
-  resize: none !important;
   padding: 0 !important;
   border-radius: 3px;
   background: var(--sticky-color, #ccc) !important;
@@ -77,8 +76,6 @@
   cursor: pointer;
   pointer-events: auto !important;
 }
-
-/* 子要素は全部非表示 */
 .sticky.minimized textarea,
 .sticky.minimized .sticky-header,
 .sticky.minimized .sticky-color-picker,
@@ -87,39 +84,9 @@
   pointer-events: none !important;
 }
 
-/* resize handle */
-.sticky-resize{
-  position:absolute;
-  right:6px;
-  bottom:6px;
-  width:16px;
-  height:16px;
-  border-radius:3px;
-  background:rgba(0,0,0,0.15);
-  cursor:se-resize;
-  z-index:4000;
-}
-
-/* minimized: 縦棒表示 */
-.sticky-note.minimized {
-  width: 14px !important;
-  height: 80px !important;
-  min-width: 14px !important;
-  min-height: 80px !important;
-  padding: 0 !important;
-  overflow: hidden;
-}
-.sticky-note.minimized .sticky-header { height:100%; display:block; padding:0; }
-.sticky-note.minimized .sticky-toggle {
-  width:100%;
-  height:100%;
-  writing-mode:vertical-rl;
-  text-orientation:upright;
-  display:block;
-  padding:0;
-  border-radius:4px;
-}
-.sticky-note.minimized .sticky-content { display:none !important; }
+/* hide-memos: hide both canvas strokes and stickies when toggled */
+.hide-memos canvas { opacity: 0 !important; pointer-events: none !important; }
+.hide-memos .sticky { opacity: 0 !important; pointer-events: none !important; }
 
 </style>
 </head>
@@ -143,7 +110,6 @@
   <div style="flex:1"></div>
 
   <button id="clearBtn"> 全消去</button>
-  <!-- トグルボタンが DOM に無かったので追加（以前のコードで参照されていたため） -->
   <button id="toggleMemoBtn">メモ非表示</button>
 </div>
 
@@ -157,39 +123,14 @@
        <h3>吾輩は猫である</h3>
         <p>
          吾輩は猫である。名前はまだ無い。
-　どこで生れたかとんと見当がつかぬ。何でも薄暗いじめじめした所でニャーニャー泣いていた事だけは記憶している。吾輩はここで始めて人間というものを見た。しかもあとで聞くとそれは書生という人間中で一番獰悪な種族であったそうだ。この書生というのは時々我々を捕まえて煮て食うという話である。しかしその当時は何という考もなかったから別段恐しいとも思わなかった。ただ彼の掌に載せられてスーと持ち上げられた時何だかフワフワした感じがあったばかりである。掌の上で少し落ちついて書生の顔を見たのがいわゆる人間というものの見始であろう。この時妙なものだと思った感じが今でも残っている。第一毛をもって装飾されべきはずの顔がつるつるしてまるで薬缶だ。その後猫にもだいぶ逢ったがこんな片輪には一度も出会わした事がない。のみならず顔の真中があまりに突起している。そうしてその穴の中から時々ぷうぷうと煙けむりを吹く。どうも咽せぽくて実に弱った。これが人間の飲む煙草というものである事はようやくこの頃知った。
-　この書生の掌の裏でしばらくはよい心持に坐っておったが、しばらくすると非常な速力で運転し始めた。書生が動くのか自分だけが動くのか分らないが無暗に眼が廻る。胸が悪くなる。到底助からないと思っていると、どさりと音がして眼から火が出た。それまでは記憶しているがあとは何の事やらいくら考え出そうとしても分らない。
-　ふと気が付いて見ると書生はいない。たくさんおった兄弟が一疋も見えぬ。肝心かんじんの母親さえ姿を隠してしまった。その上今までの所とは違って無暗むやみに明るい。眼を明いていられぬくらいだ。はてな何でも容子がおかしいと、のそのそ這い出して見ると非常に痛い。吾輩は藁わらの上から急に笹原の中へ棄てられたのである。
+         <!-- （省略）長文サンプル -->
        </p>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Firebase CDN (Realtime Database, Auth) -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-
 <script>
-/* ---------------------------
-   Firebase config - 
-----------------------------*/
-const firebaseConfig = {
-  apiKey: "AIzaSyDZ2UDYp0iMp-9MtXk-HuoIsy6jcPCAHBw",
-  authDomain: "yonda-3f85f.firebaseapp.com",
-  databaseURL: "https://yonda-3f85f-default-rtdb.firebaseio.com",
-  projectId: "yonda-3f85f",
-  storageBucket: "yonda-3f85f.firebasestorage.app",
-  messagingSenderId: "299265439268",
-  appId: "1:299265439268:web:9667b9cb0f4d0f2ede8ab1",
-  measurementId: "G-MGZD9YFWPT"
-};
-
-firebase.initializeApp(firebaseConfig);
-firebase.auth().signInAnonymously().catch(e=>console.error("anon login failed", e));
-const rtdb = firebase.database();
-
 /* ---------------------------
    DOM & UI state
 ----------------------------*/
@@ -222,10 +163,8 @@ sizeNumber.addEventListener('input', ()=>{ const v = Number(sizeNumber.value); i
 
 /* ---------------------------
    Stroke storage (normalized) & drawing
-   - store segments normalized to CSS px (0..1)
-   - redraw scales to current CSS size
 ----------------------------*/
-let strokes = []; // array of {id, mode, color, size (css px), segments: [{x1,y1,cx,cy,x2,y2}], time}
+let strokes = []; // array of {id, mode, color, size, segments: [{x1,y1,cx,cy,x2,y2}], time}
 const STROKE_LS_KEY = 'memoStrokes_v1';
 
 // unique id
@@ -247,7 +186,7 @@ function resizeCanvas(){
   canvas.width = Math.round(cssW * dpr);
   canvas.height = Math.round(cssH * dpr);
 
-  // set transform so 1 CSS px = 1 unit in drawing commands
+  // map CSS px to canvas drawing by scaling context
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   // redraw (text is DOM overlay, so only strokes are drawn here)
@@ -265,7 +204,7 @@ function drawStrokeOnCanvas(stroke){
   ctx.save();
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.lineWidth = (stroke.size || 2); // because ctx.setTransform maps CSS px
+  ctx.lineWidth = (stroke.size || 2); // since ctx is scaled, size is in CSS px
   if(stroke.mode === 'pen'){ ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = stroke.color || '#222'; }
   else { ctx.globalCompositeOperation = 'destination-out'; ctx.strokeStyle = 'rgba(0,0,0,1)'; }
   for(const seg of stroke.segments){
@@ -294,9 +233,10 @@ function drawLine(p1, p2){
 }
 
 function redrawAll(){
-  // clear backing (note: canvas.width/height are device pixels; ctx.setTransform maps to CSS px)
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  // draw strokes in order
+  // clear backing using CSS px coordinates (ctx is scaled by DPR)
+  const rect = canvas.getBoundingClientRect();
+  const cssW = rect.width, cssH = rect.height;
+  ctx.clearRect(0,0,cssW,cssH);
   for(const s of strokes) drawStrokeOnCanvas(s);
 }
 
@@ -318,8 +258,7 @@ function midpoint(a,b){ return { x:(a.x+b.x)/2, y:(a.y+b.y)/2 }; }
 function startDraw(e){
   // pointer/touch start
   e.preventDefault();
-  // capture pointer for more reliable move/up events
-  if(e.pointerId && canvas.setPointerCapture) canvas.setPointerCapture(e.pointerId);
+  if(e.pointerId && canvas.setPointerCapture) try{ canvas.setPointerCapture(e.pointerId); }catch(_){}
 
   isDrawing = true;
   const p = getPos(e);
@@ -354,22 +293,9 @@ function moveDraw(e){
   };
   currentStroke.segments.push(seg);
 
-  // send to DB (lightweight single-segment message)
-  try{
-    rtdb.ref('draw').set({
-      strokeId: currentStroke.id,
-      seg: seg,
-      color: currentStroke.color,
-      size: currentStroke.size,
-      mode: currentStroke.mode,
-      time: Date.now()
-    });
-  }catch(err){ console.warn('send draw failed', err); }
-
   prevPoint = p; prevMid = mid;
 }
 function endDraw(e){
-  // release pointer capture
   if(e && e.pointerId && canvas.releasePointerCapture) {
     try{ canvas.releasePointerCapture(e.pointerId); }catch(_){} 
   }
@@ -388,26 +314,8 @@ canvas.addEventListener('pointerup', endDraw);
 canvas.addEventListener('pointercancel', endDraw);
 canvas.addEventListener('pointerleave', endDraw);
 
-/* ---------- receive remote partial-segment messages and append to remote stroke ---------- */
-rtdb.ref('draw').on('value', snapshot => {
-  const d = snapshot.val();
-  if(!d || !d.seg) return;
-  // find or create stroke
-  let st = strokes.find(s => s.id === d.strokeId);
-  if(!st){
-    st = { id: d.strokeId || uid(), mode: d.mode || 'pen', color: d.color || '#222', size: d.size || 4, segments: [], time: d.time || Date.now() };
-    strokes.push(st);
-  }
-  st.segments.push(d.seg);
-  localSaveStrokes();
-  // throttle redraw a little
-  clearTimeout(window.__redrawTimer);
-  window.__redrawTimer = setTimeout(()=> redrawAll(), 6);
-});
-
 /* ---------------------------
    Sticky (ふせん) system
-   - stored at rtdb.ref('notes/<id>')
    - position saved normalized to CSS coords (0..1)
 ----------------------------*/
 let zCounter = 1000;
@@ -449,25 +357,6 @@ function createSticky(saved){
   const rh = document.createElement('div'); rh.className='resize-handle'; s.appendChild(rh);
   canvasWrap.appendChild(s);
 
-  if(!fromSync && (!saved || !saved.id)){
-    rtdb.ref('notes/' + id).set({
-      left: (parseInt(s.style.left) || 0) / canvasWrap.clientWidth,
-      top: (parseInt(s.style.top) || 0) / canvasWrap.clientHeight,
-      width: s.offsetWidth,
-      height: s.offsetHeight,
-      color: s.style.background,
-      textColor: s.style.color,
-      text: content.innerHTML,
-      minimized: false,
-      createdAt: Date.now()
-    });
-  }
-
-  // sync text edits
-  content.addEventListener('input', ()=> {
-    rtdb.ref('notes/' + id).update({ text: content.innerHTML, lastUpdate: Date.now() });
-  });
-
   // selection / z-index
   s.addEventListener('pointerdown', (ev)=> {
     if(ev.target.closest('.sticky-controls')) return;
@@ -493,7 +382,9 @@ function createSticky(saved){
   });
   document.addEventListener('pointerup', (ev)=>{
     if(dragging){ dragging=false;
-      rtdb.ref('notes/' + id).update({ left: parseInt(s.style.left)/canvasWrap.clientWidth, top: parseInt(s.style.top)/canvasWrap.clientHeight, lastUpdate: Date.now() });
+      // (no remote DB; just keep local) store prev pos in dataset for potential future use
+      s.dataset.prevLeft = parseInt(s.style.left);
+      s.dataset.prevTop = parseInt(s.style.top);
     }
   });
 
@@ -501,68 +392,23 @@ function createSticky(saved){
   let resizing=false, startW=0, startH=0, startX=0, startY=0;
   rh.addEventListener('pointerdown', (ev)=>{ ev.preventDefault(); ev.stopPropagation(); resizing=true; startW=s.offsetWidth; startH=s.offsetHeight; startX=ev.clientX; startY=ev.clientY; rh.setPointerCapture && rh.setPointerCapture(ev.pointerId); });
   document.addEventListener('pointermove', (ev)=>{ if(!resizing) return; const dx = ev.clientX - startX; const dy = ev.clientY - startY; s.style.width = Math.max(60, startW + dx) + 'px'; s.style.height = Math.max(30, startH + dy) + 'px'; });
-  document.addEventListener('pointerup', (ev)=>{ if(resizing){ resizing=false; rtdb.ref('notes/' + id).update({ width: s.offsetWidth, height: s.offsetHeight, lastUpdate: Date.now() }); } });
+  document.addEventListener('pointerup', (ev)=>{ if(resizing){ resizing=false; } });
 
-  // minimize / close
-  // --- minimized strip click to restore ---
-  s.addEventListener('click', (ev) => {
-    // minimized の時だけ反応
-    if (!s.classList.contains('minimized')) return;
-
-    ev.stopPropagation();
-    s.classList.remove('minimized');
-
-    // 元サイズに戻す
-    const pw = s.dataset.prevWidth || (saved?.width + 'px') || '180px';
-    const ph = s.dataset.prevHeight || (saved?.height + 'px') || '110px';
-    s.style.width = pw;
-    s.style.height = ph;
-
-    rtdb.ref('notes/' + id).update({
-      minimized: false,
-      lastUpdate: Date.now()
-    });
-  });
-
-  controls.querySelector('.minBtn').addEventListener('click', (ev)=>{ ev.stopPropagation(); s.classList.toggle('minimized'); rtdb.ref('notes/' + id).update({ minimized: s.classList.contains('minimized'), lastUpdate: Date.now() }); });
-  controls.querySelector('.closeBtn').addEventListener('click', (ev)=>{ ev.stopPropagation(); rtdb.ref('notes/' + id).remove(); s.remove(); });
+  // minimize / close actions
+  controls.querySelector('.minBtn').addEventListener('click', (ev)=>{ ev.stopPropagation(); s.classList.toggle('minimized'); });
+  controls.querySelector('.closeBtn').addEventListener('click', (ev)=>{ ev.stopPropagation(); s.remove(); });
 
   return s;
 }
 
-/* sticky DB listeners */
-rtdb.ref('notes').on('child_added', snap=>{
-  const id = snap.key; const data = snap.val();
-  if(document.querySelector(`[data-sticky-id="${id}"]`)) return;
-  const obj = { id:id, fromSync:true, left: data.left, top: data.top, width: data.width, height: data.height, color: data.color, textColor: data.textColor, text: data.text, minimized: data.minimized };
-  const s = createSticky(obj);
-  s.dataset.stickyId = id;
-});
-rtdb.ref('notes').on('child_changed', snap=>{
-  const id = snap.key, d = snap.val();
-  const s = document.querySelector(`[data-sticky-id="${id}"]`); if(!s) return;
-  if(d.left !== undefined) s.style.left = d.left * canvasWrap.clientWidth + 'px';
-  if(d.top !== undefined) s.style.top = d.top * canvasWrap.clientHeight + 'px';
-  if(d.width !== undefined) s.style.width = d.width + 'px';
-  if(d.height !== undefined) s.style.height = d.height + 'px';
-  if(d.color !== undefined) s.style.background = d.color;
-  const c = s.querySelector('.sticky-content');
-  if(d.textColor !== undefined) c.style.color = d.textColor;
-  if(d.text !== undefined) c.innerHTML = d.text;
-  if(d.minimized !== undefined) { if(d.minimized) s.classList.add('minimized'); else s.classList.remove('minimized'); }
-});
-rtdb.ref('notes').on('child_removed', snap=>{
-  const id = snap.key; const s = document.querySelector(`[data-sticky-id="${id}"]`); if(s) s.remove();
-});
-
 /* UI: add sticky */
 addStickyBtn.addEventListener('click', ()=> createSticky({}));
 
-/* toggle memos */
+/* toggle memos: hide both canvas strokes and stickies */
 let memoVisible = true;
 toggleMemoBtn.addEventListener('click', ()=>{
   memoVisible = !memoVisible;
-  document.querySelectorAll('.sticky').forEach(s=> s.classList.toggle('hidden', !memoVisible));
+  canvasWrap.classList.toggle('hide-memos', !memoVisible);
   toggleMemoBtn.textContent = memoVisible ? 'メモ非表示' : 'メモ表示';
 });
 
@@ -571,18 +417,12 @@ clearBtn.addEventListener('click', ()=>{
   strokes = []; localSaveStrokes();
   ctx.clearRect(0,0,canvas.width,canvas.height);
   document.querySelectorAll('.sticky').forEach(s=>s.remove());
-  rtdb.ref('notes').remove().catch(()=>{});
-  rtdb.ref('draw').remove().catch(()=>{});
 });
 
 /* ---------- load local saved strokes on start ---------- */
 window.addEventListener('load', ()=>{
-  // make sure initial resize done
   setTimeout(()=> { resizeCanvas(); redrawAll(); }, 50);
 });
-
-/* Prevent text overlay blocking pointer events on canvas: done earlier via pointer-events:none */
-/* End of script */
 </script>
 </body>
 </html>
