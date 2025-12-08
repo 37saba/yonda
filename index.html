@@ -259,6 +259,43 @@ canvas.addEventListener('pointerup', endDraw);
 canvas.addEventListener('pointercancel', endDraw);
 canvas.addEventListener('pointerleave', endDraw);
 
+let canvasScale = 1;
+let offsetX = 0, offsetY = 0;
+
+let lastTouchDist = null;
+let lastTouchCenter = null;
+
+canvas.addEventListener('touchstart', e => {
+  if(e.touches.length === 2){
+    e.preventDefault();
+    const t1 = e.touches[0], t2 = e.touches[1];
+    lastTouchDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+    lastTouchCenter = { x: (t1.clientX + t2.clientX)/2, y: (t1.clientY + t2.clientY)/2 };
+  }
+});
+
+canvas.addEventListener('touchmove', e => {
+  if(e.touches.length === 2){
+    e.preventDefault();
+    const t1 = e.touches[0], t2 = e.touches[1];
+    const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+    const center = { x: (t1.clientX + t2.clientX)/2, y: (t1.clientY + t2.clientY)/2 };
+    
+    // ズーム比率
+    const scaleChange = dist / lastTouchDist;
+    canvasScale *= scaleChange;
+
+    // 平行移動
+    offsetX += center.x - lastTouchCenter.x;
+    offsetY += center.y - lastTouchCenter.y;
+
+    lastTouchDist = dist;
+    lastTouchCenter = center;
+
+    redrawAll(); // ここで ctx.setTransform(canvasScale,0,0,canvasScale,offsetX,offsetY) などを使う
+  }
+});
+
 /* ---------------------------
    Sticky (ふせん) system
 ----------------------------*/
