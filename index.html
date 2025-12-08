@@ -193,12 +193,9 @@ setTimeout(()=> { resizeCanvas(); redrawAll(); }, 20);
 let isDrawing = false, prevPoint = null, prevMid = null, currentStroke = null;
 
 function getPos(e){
-  const r = canvas.getBoundingClientRect();
-  const p = (e.touches && e.touches[0]) ? e.touches[0] : e;
-  const x = (p.clientX - r.left - offsetX) / canvasScale;
-  const y = (p.clientY - r.top - offsetY) / canvasScale;
-  return { x, y };
-}
+ const r = canvas.getBoundingClientRect();
+ const p = (e.touches && e.touches[0]) ? e.touches[0] : e;
+ return { x: p.clientX - r.left, y: p.clientY - r.top }; } function midpoint(a,b){ return { x:(a.x+b.x)/2, y:(a.y+b.y)/2 }; }
 
 function midpoint(a,b){ return { x:(a.x+b.x)/2, y:(a.y+b.y)/2 }; }
 
