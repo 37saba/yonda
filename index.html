@@ -295,6 +295,64 @@ canvas.addEventListener('touchmove', e => {
     redrawAll(); // ここで ctx.setTransform(canvasScale,0,0,canvasScale,offsetX,offsetY) などを使う
   }
 });
+function startDraw(e){
+  // スマホで2本指以上なら描画キャンセル
+  if(e.touches && e.touches.length > 1) return;
+
+  e.preventDefault();
+  if(e.pointerId && canvas.setPointerCapture) try{ canvas.setPointerCapture(e.pointerId); }catch(_){}
+  isDrawing = true;
+  const p = getPos(e);
+  prevPoint = p; prevMid = p;
+  currentStroke = { id: uid(), mode: mode==='pen'?penColorInput.value:null, size: Number(penSizeInput.value), segments: [], time: Date.now() };
+}
+
+function moveDraw(e){
+  if(e.touches && e.touches.length > 1) return; // 2本指以上なら描画しない
+  if(!isDrawing || !currentStroke) return;
+
+  const p = getPos(e);
+  const mid = midpoint(prevPoint, p);
+
+  // 即時描画
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.lineWidth = Number(penSizeInput.value);
+  if(mode === 'pen'){ ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = penColorInput.value; }
+  else { ctx.globalCompositeOperation = 'destination-out'; }
+  ctx.beginPath();
+  ctx.moveTo(prevMid.x, prevMid.y);
+  ctx.quadraticCurveTo(prevPoint.x, prevPoint.y, mid.x, mid.y);
+  ctx.stroke();
+
+  const rect = canvas.getBoundingClientRect();
+  const cssW = rect.width, cssH = rect.height;
+  const seg = {
+    x1: prevMid.x / cssW,
+    y1: prevMid.y / cssH,
+    cx: prevPoint.x / cssW,
+    cy: prevPoint.y / cssH,
+    x2: mid.x / cssW,
+    y2: mid.y / cssH
+  };
+  currentStroke.segments.push(seg);
+
+  prevPoint = p; prevMid = mid;
+}
+
+function endDraw(e){
+  if(e.touches && e.touches.length > 1) return; // 2本指以上なら描画終了しない
+  isDrawing = false;
+  if(currentStroke){
+    strokes.push(currentStroke);
+    localSaveStrokes();
+    if (window.__saveStrokeToRemote) {
+      window.__saveStrokeToRemote(currentStroke).catch(err => console.warn('saveStroke remote failed', err));
+    }
+    currentStroke = null;
+  }
+  prevPoint = prevMid = null;
+}
+
 
 /* ---------------------------
    Sticky (ふせん) system
