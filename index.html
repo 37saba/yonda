@@ -296,9 +296,8 @@ canvas.addEventListener('touchmove', e => {
   }
 });
 function startDraw(e){
-  // スマホで2本指以上なら描画キャンセル
-  if(e.touches && e.touches.length > 1) return;
-
+  // pointerType が touch で touches.length > 1 の場合は描画中止
+  if(e.pointerType === 'touch' && e.isPrimary === false) return; // 2本目以降の指なら無視
   e.preventDefault();
   if(e.pointerId && canvas.setPointerCapture) try{ canvas.setPointerCapture(e.pointerId); }catch(_){}
   isDrawing = true;
@@ -308,13 +307,11 @@ function startDraw(e){
 }
 
 function moveDraw(e){
-  if(e.touches && e.touches.length > 1) return; // 2本指以上なら描画しない
   if(!isDrawing || !currentStroke) return;
-
   const p = getPos(e);
   const mid = midpoint(prevPoint, p);
 
-  // 即時描画
+  // 描画処理
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   ctx.lineWidth = Number(penSizeInput.value);
   if(mode === 'pen'){ ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = penColorInput.value; }
@@ -340,7 +337,7 @@ function moveDraw(e){
 }
 
 function endDraw(e){
-  if(e.touches && e.touches.length > 1) return; // 2本指以上なら描画終了しない
+  if(!isDrawing) return;
   isDrawing = false;
   if(currentStroke){
     strokes.push(currentStroke);
