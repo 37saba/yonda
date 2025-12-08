@@ -178,8 +178,8 @@ function drawLine(p1, p2){
 
 function redrawAll(){
   const rect = canvas.getBoundingClientRect();
-  const cssW = rect.width, cssH = rect.height;
-  ctx.clearRect(0,0,cssW,cssH);
+  ctx.setTransform(canvasScale, 0, 0, canvasScale, offsetX, offsetY);
+  ctx.clearRect(0, 0, rect.width / canvasScale, rect.height / canvasScale);
   for(const s of strokes) drawStrokeOnCanvas(s);
 }
 
@@ -193,8 +193,11 @@ let isDrawing = false, prevPoint = null, prevMid = null, currentStroke = null;
 function getPos(e){
   const r = canvas.getBoundingClientRect();
   const p = (e.touches && e.touches[0]) ? e.touches[0] : e;
-  return { x: p.clientX - r.left, y: p.clientY - r.top };
+  const x = (p.clientX - r.left - offsetX) / canvasScale;
+  const y = (p.clientY - r.top - offsetY) / canvasScale;
+  return { x, y };
 }
+
 function midpoint(a,b){ return { x:(a.x+b.x)/2, y:(a.y+b.y)/2 }; }
 
 function startDraw(e){
@@ -280,7 +283,7 @@ canvas.addEventListener('touchmove', e => {
     const t1 = e.touches[0], t2 = e.touches[1];
     const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
     const center = { x: (t1.clientX + t2.clientX)/2, y: (t1.clientY + t2.clientY)/2 };
-    
+
     // ズーム比率
     const scaleChange = dist / lastTouchDist;
     canvasScale *= scaleChange;
@@ -292,9 +295,10 @@ canvas.addEventListener('touchmove', e => {
     lastTouchDist = dist;
     lastTouchCenter = center;
 
-    redrawAll(); // ここで ctx.setTransform(canvasScale,0,0,canvasScale,offsetX,offsetY) などを使う
+    redrawAll();
   }
 });
+
 function startDraw(e){
   // 一本指のみ描画。二本目以降の指は無視
   if(e.pointerType === 'touch' && !e.isPrimary) return;
