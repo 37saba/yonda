@@ -199,54 +199,8 @@ function getPos(e){
 
 function midpoint(a,b){ return { x:(a.x+b.x)/2, y:(a.y+b.y)/2 }; }
 
-function startDraw(e){
-  if(e.touches && e.touches.length > 1) return; // 二本指以上は描画しない
-  e.preventDefault();
-  isDrawing = true;
-  const p = getPos(e);
-  prevPoint = prevMid = p;
-  currentStroke = { id: uid(), mode: mode==='pen'?penColorInput.value:null, size: Number(penSizeInput.value), segments: [], time: Date.now() };
-}
+function startDraw(e){ e.preventDefault(); if(e.pointerId && canvas.setPointerCapture) try{ canvas.setPointerCapture(e.pointerId); }catch(_){} isDrawing = true; const p = getPos(e); prevPoint = p; prevMid = p; currentStroke = { id: uid(), mode: mode, color: mode==='pen'?penColorInput.value:null, size: Number(penSizeInput.value), segments: [], time: Date.now() }; } function moveDraw(e){ if(!isDrawing || !currentStroke) return; const p = getPos(e); const mid = midpoint(prevPoint, p); // immediate UX draw ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = Number(penSizeInput.value); if(mode === 'pen'){ ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = penColorInput.value; } else { ctx.globalCompositeOperation = 'destination-out'; } ctx.beginPath(); ctx.moveTo(prevMid.x, prevMid.y); ctx.quadraticCurveTo(prevPoint.x, prevPoint.y, mid.x, mid.y); ctx.stroke(); // normalized segment const rect = canvas.getBoundingClientRect(); const cssW = rect.width, cssH = rect.height; const seg = { x1: prevMid.x / cssW, y1: prevMid.y / cssH, cx: prevPoint.x / cssW, cy: prevPoint.y / cssH, x2: mid.x / cssW, y2: mid.y / cssH }; currentStroke.segments.push(seg); prevPoint = p; prevMid = mid; } function endDraw(e){ if(e && e.pointerId && canvas.releasePointerCapture) { try{ canvas.releasePointerCapture(e.pointerId); }catch(_){} } isDrawing = false; if(currentStroke){ // push locally and persist, then send to Supabase (if available) strokes.push(currentStroke); localSaveStrokes(); // NOTE: saveStroke will be defined by the module import below (if supabase.js present). if (window.__saveStrokeToRemote) { window.__saveStrokeToRemote(currentStroke).catch(err => console.warn('saveStroke remote failed', err)); } currentStroke = null; } prevPoint = prevMid = null; }
 
-function moveDraw(e){
-  if(!isDrawing || !currentStroke || (e.touches && e.touches.length>1)) return;
-  const p = getPos(e);
-  const mid = midpoint(prevPoint, p);
-
-  ctx.lineCap='round'; ctx.lineJoin='round';
-  ctx.lineWidth = Number(penSizeInput.value);
-  ctx.globalCompositeOperation = (mode==='pen')?'source-over':'destination-out';
-  ctx.strokeStyle = (mode==='pen')?penColorInput.value:'rgba(0,0,0,1)';
-  ctx.beginPath();
-  ctx.moveTo(prevMid.x, prevMid.y);
-  ctx.quadraticCurveTo(prevPoint.x, prevPoint.y, mid.x, mid.y);
-  ctx.stroke();
-
-  const rect = canvas.getBoundingClientRect();
-  currentStroke.segments.push({
-    x1: prevMid.x / rect.width,
-    y1: prevMid.y / rect.height,
-    cx: prevPoint.x / rect.width,
-    cy: prevPoint.y / rect.height,
-    x2: mid.x / rect.width,
-    y2: mid.y / rect.height
-  });
-
-  prevPoint = p;
-  prevMid = mid;
-}
-
-function endDraw(e){
-  if(!isDrawing) return;
-  isDrawing = false;
-  if(currentStroke){
-    strokes.push(currentStroke);
-    localSaveStrokes();
-    if(window.__saveStrokeToRemote) window.__saveStrokeToRemote(currentStroke).catch(()=>{});
-    currentStroke = null;
-  }
-  prevPoint = prevMid = null;
-}
 canvas.addEventListener('pointerdown', startDraw);
 canvas.addEventListener('pointermove', moveDraw);
 canvas.addEventListener('pointerup', endDraw);
