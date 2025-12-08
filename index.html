@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>yonda?β</title>
 <style>
-  :root{ --toolbar-bg:#f5f5f7; --btn-bg:#0b76d1; --btn-active:#ff6f00; }
+  :root{
+    --toolbar-bg:#f5f5f7; --btn-bg:#0b76d1; --btn-active:#ff6f00;
+  }
   html,body{height:100%;margin:0;font-family:system-ui,"Yu Gothic",sans-serif}
   .toolbar{background:var(--toolbar-bg);padding:8px;display:flex;gap:8px;align-items:center;border-bottom:1px solid #ddd;flex-wrap:wrap;z-index:3000}
   .toolbar label{display:flex;align-items:center;gap:6px;font-size:14px}
@@ -15,9 +17,12 @@
   input[type=number]{width:64px}
   .app{display:flex;flex-direction:column;height:calc(100% - 56px)}
   .canvas-wrap{flex:1;position:relative;overflow:hidden;background:#fff}
+  /* Canvas is visually below text overlay but above background */
   canvas{position:absolute;left:0;top:0;width:100%;height:100%;touch-action:none;z-index:1;background:transparent}
+  /* Text overlay sits on top, pointer-events:none so drawing still works */
   .text-overlay{position:absolute;inset:0;padding:20px;box-sizing:border-box;writing-mode:vertical-rl;text-orientation:upright;overflow:auto;z-index:20;pointer-events:none}
   .text-overlay .paper{background:transparent;color:#222}
+  /* sticky */
   .sticky{position:absolute;z-index:30;display:flex;flex-direction:column;border-radius:8px;box-shadow:0 6px 14px rgba(0,0,0,0.12);min-width:120px;min-height:80px;overflow:hidden;background:#fff475;user-select:none;cursor:grab}
   .sticky.selected{outline:3px solid rgba(0,120,215,0.5)}
   .sticky-header{display:flex;justify-content:flex-end;align-items:center;gap:6px;padding:6px 8px;background:transparent}
@@ -26,21 +31,64 @@
   .resize-handle{position:absolute;right:6px;bottom:6px;width:16px;height:16px;border-radius:3px;background:rgba(0,0,0,0.15);cursor:se-resize;z-index:60}
   .hidden{opacity:0;pointer-events:none}
   @media(max-width:700px){.text-overlay{width:40%}}
-  /* minimized */
-  .sticky.minimized { width: 6px !important; min-width:6px !important; padding:0 !important; border-radius:3px; background: var(--sticky-color,#ccc) !important; overflow:hidden !important; cursor:pointer; pointer-events:auto !important; }
-  .sticky.minimized textarea, .sticky.minimized .sticky-header, .sticky.minimized .sticky-color-picker, .sticky.minimized .sticky-delete { display:none !important; pointer-events:none !important; }
-  /* hide-memos: hide both canvas strokes and stickies when toggled */
-  .hide-memos canvas { opacity: 0 !important; pointer-events: none !important; }
-  .hide-memos .sticky { opacity: 0 !important; pointer-events: none !important; }
-</style>
+/* ふせんスタイル */
+.sticky-note{
+  position:absolute;
+  border-radius:8px;
+  box-shadow:0 6px 14px rgba(0,0,0,0.12);
+  overflow:visible;
+  user-select:none;
+  min-width:60px;
+  min-height:40px;
+  z-index:3000;
+}
+.sticky-header{
+  display:flex;
+  justify-content:flex-end;
+  gap:6px;
+  align-items:center;
+  padding:6px 8px;
+  cursor:grab;
+  background:transparent;
+}
+.sticky-toggle, .sticky-close {
+  background:rgba(255,255,255,0.8);
+  border:1px solid rgba(0,0,0,0.12);
+  border-radius:4px;
+  padding:2px 6px;
+  cursor:pointer;
+}
+.sticky-content{
+  padding:8px;
+  font-size:14px;
+  min-height:40px;
+  background:transparent;
+  outline:none;
+}
+/* minimized */
+.sticky.minimized {
+  width: 6px !important;
+  min-width: 6px !important;
+  padding: 0 !important;
+  border-radius: 3px;
+  background: var(--sticky-color, #ccc) !important;
+  overflow: hidden !important;
+  cursor: pointer;
+  pointer-events: auto !important;
+}
+.sticky.minimized textarea,
+.sticky.minimized .sticky-header,
+.sticky.minimized .sticky-color-picker,
+.sticky.minimized .sticky-delete {
+  display: none !important;
+  pointer-events: none !important;
+}
 
-<!-- Supabase クライアント読み込み -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<!-- Supabase の URL/ANON は任意の方法で設定済み（別ファイルでもOK） -->
-<script>
-  window.SUPABASE_URL = "https://pphwdbxacalkjobjdmhf.supabase.co";
-  window.SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwaHdkYnhhY2Fsa2pvYmpkbWhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5NTc3MDUsImV4cCI6MjA4MDUzMzcwNX0.OF6fzndDhtmrjUn_o9Jg5Fne9eHwSnWzfFT49_Iv6h0";
-</script>
+/* hide-memos: hide both canvas strokes and stickies when toggled */
+.hide-memos canvas { opacity: 0 !important; pointer-events: none !important; }
+.hide-memos .sticky { opacity: 0 !important; pointer-events: none !important; }
+
+</style>
 </head>
 <body>
 
@@ -104,9 +152,9 @@ const toggleMemoBtn = document.getElementById('toggleMemoBtn');
 const clearBtn = document.getElementById('clearBtn');
 
 const textOverlay = document.getElementById('textOverlay');
-textOverlay.style.pointerEvents = 'none';
+textOverlay.style.pointerEvents = 'none'; // ensure canvas interactions work
 
-let mode = 'pen';
+let mode = 'pen'; // 'pen' | 'eraser'
 penBtn.addEventListener('click', ()=>{ mode='pen'; penBtn.classList.add('active'); eraserBtn.classList.remove('active'); });
 eraserBtn.addEventListener('click', ()=>{ mode='eraser'; eraserBtn.classList.add('active'); penBtn.classList.remove('active'); });
 
@@ -116,10 +164,12 @@ sizeNumber.addEventListener('input', ()=>{ const v = Number(sizeNumber.value); i
 /* ---------------------------
    Stroke storage (normalized) & drawing
 ----------------------------*/
-let strokes = [];
-window.strokes = strokes; // {id, mode, color, size, segments: [{x1,y1,cx,cy,x2,y2}], time}
+let strokes = []; // array of {id, mode, color, size, segments: [{x1,y1,cx,cy,x2,y2}], time}
 const STROKE_LS_KEY = 'memoStrokes_v1';
+
+// unique id
 function uid(){ return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8); }
+
 function localSaveStrokes(){ try{ localStorage.setItem(STROKE_LS_KEY, JSON.stringify(strokes)); }catch(e){console.warn(e);} }
 function localLoadStrokes(){ try{ const raw = localStorage.getItem(STROKE_LS_KEY); return raw?JSON.parse(raw):[]; }catch(e){ return []; } }
 
@@ -129,18 +179,24 @@ function resizeCanvas(){
   const cssW = Math.max(1, Math.round(rect.width));
   const cssH = Math.max(1, Math.round(rect.height));
   const dpr = window.devicePixelRatio || 1;
+
   canvas.style.width = cssW + 'px';
   canvas.style.height = cssH + 'px';
+
   canvas.width = Math.round(cssW * dpr);
   canvas.height = Math.round(cssH * dpr);
+
+  // map CSS px to canvas drawing by scaling context
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  // redraw (text is DOM overlay, so only strokes are drawn here)
   redrawAll();
 }
 window.addEventListener('resize', resizeCanvas);
 new ResizeObserver(resizeCanvas).observe(canvasWrap);
 resizeCanvas();
 
-/* draw a stroke */
+/* draw a single stroke (use CSS px coords by scaling segment * cssW/cssH) */
 function drawStrokeOnCanvas(stroke){
   if(!stroke || !stroke.segments) return;
   const rect = canvas.getBoundingClientRect();
@@ -148,7 +204,7 @@ function drawStrokeOnCanvas(stroke){
   ctx.save();
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.lineWidth = (stroke.size || 2);
+  ctx.lineWidth = (stroke.size || 2); // since ctx is scaled, size is in CSS px
   if(stroke.mode === 'pen'){ ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = stroke.color || '#222'; }
   else { ctx.globalCompositeOperation = 'destination-out'; ctx.strokeStyle = 'rgba(0,0,0,1)'; }
   for(const seg of stroke.segments){
@@ -160,7 +216,7 @@ function drawStrokeOnCanvas(stroke){
   ctx.restore();
 }
 
-/* simple fallback line */
+/* Compatibility helper: draw simple straight line between two points (CSS px). */
 function drawLine(p1, p2){
   if(!p1 || !p2) return;
   ctx.save();
@@ -176,14 +232,11 @@ function drawLine(p1, p2){
   ctx.restore();
 }
 
-let canvasScale = 1;
-let offsetX = 0, offsetY = 0;
-
 function redrawAll(){
+  // clear backing using CSS px coordinates (ctx is scaled by DPR)
   const rect = canvas.getBoundingClientRect();
-  ctx.setTransform(canvasScale, 0, 0, canvasScale, offsetX, offsetY);
-  // transformを考慮して消去
-  ctx.clearRect(0,0,rect.width / canvasScale, rect.height / canvasScale);
+  const cssW = rect.width, cssH = rect.height;
+  ctx.clearRect(0,0,cssW,cssH);
   for(const s of strokes) drawStrokeOnCanvas(s);
 }
 
@@ -195,13 +248,65 @@ setTimeout(()=> { resizeCanvas(); redrawAll(); }, 20);
 let isDrawing = false, prevPoint = null, prevMid = null, currentStroke = null;
 
 function getPos(e){
- const r = canvas.getBoundingClientRect();
- const p = (e.touches && e.touches[0]) ? e.touches[0] : e;
- return { x: p.clientX - r.left, y: p.clientY - r.top }; } function midpoint(a,b){ return { x:(a.x+b.x)/2, y:(a.y+b.y)/2 }; }
-
+  const r = canvas.getBoundingClientRect();
+  // support pointer events and touch
+  const p = (e.touches && e.touches[0]) ? e.touches[0] : e;
+  return { x: p.clientX - r.left, y: p.clientY - r.top };
+}
 function midpoint(a,b){ return { x:(a.x+b.x)/2, y:(a.y+b.y)/2 }; }
 
-function startDraw(e){ e.preventDefault(); if(e.pointerId && canvas.setPointerCapture) try{ canvas.setPointerCapture(e.pointerId); }catch(_){} isDrawing = true; const p = getPos(e); prevPoint = p; prevMid = p; currentStroke = { id: uid(), mode: mode, color: mode==='pen'?penColorInput.value:null, size: Number(penSizeInput.value), segments: [], time: Date.now() }; } function moveDraw(e){ if(!isDrawing || !currentStroke) return; const p = getPos(e); const mid = midpoint(prevPoint, p); // immediate UX draw ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = Number(penSizeInput.value); if(mode === 'pen'){ ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = penColorInput.value; } else { ctx.globalCompositeOperation = 'destination-out'; } ctx.beginPath(); ctx.moveTo(prevMid.x, prevMid.y); ctx.quadraticCurveTo(prevPoint.x, prevPoint.y, mid.x, mid.y); ctx.stroke(); // normalized segment const rect = canvas.getBoundingClientRect(); const cssW = rect.width, cssH = rect.height; const seg = { x1: prevMid.x / cssW, y1: prevMid.y / cssH, cx: prevPoint.x / cssW, cy: prevPoint.y / cssH, x2: mid.x / cssW, y2: mid.y / cssH }; currentStroke.segments.push(seg); prevPoint = p; prevMid = mid; } function endDraw(e){ if(e && e.pointerId && canvas.releasePointerCapture) { try{ canvas.releasePointerCapture(e.pointerId); }catch(_){} } isDrawing = false; if(currentStroke){ // push locally and persist, then send to Supabase (if available) strokes.push(currentStroke); localSaveStrokes(); // NOTE: saveStroke will be defined by the module import below (if supabase.js present). if (window.__saveStrokeToRemote) { window.__saveStrokeToRemote(currentStroke).catch(err => console.warn('saveStroke remote failed', err)); } currentStroke = null; } prevPoint = prevMid = null; }
+function startDraw(e){
+  // pointer/touch start
+  e.preventDefault();
+  if(e.pointerId && canvas.setPointerCapture) try{ canvas.setPointerCapture(e.pointerId); }catch(_){}
+
+  isDrawing = true;
+  const p = getPos(e);
+  prevPoint = p; prevMid = p;
+  currentStroke = { id: uid(), mode: mode, color: mode==='pen'?penColorInput.value:null, size: Number(penSizeInput.value), segments: [], time: Date.now() };
+}
+function moveDraw(e){
+  if(!isDrawing || !currentStroke) return;
+  const p = getPos(e);
+  const mid = midpoint(prevPoint, p);
+
+  // immediate UX draw (CSS px coords)
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.lineWidth = Number(penSizeInput.value);
+  if(mode === 'pen'){ ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = penColorInput.value; }
+  else { ctx.globalCompositeOperation = 'destination-out'; }
+  ctx.beginPath();
+  ctx.moveTo(prevMid.x, prevMid.y);
+  ctx.quadraticCurveTo(prevPoint.x, prevPoint.y, mid.x, mid.y);
+  ctx.stroke();
+
+  // normalize segment (CSS basis 0..1)
+  const rect = canvas.getBoundingClientRect();
+  const cssW = rect.width, cssH = rect.height;
+  const seg = {
+    x1: prevMid.x / cssW,
+    y1: prevMid.y / cssH,
+    cx: prevPoint.x / cssW,
+    cy: prevPoint.y / cssH,
+    x2: mid.x / cssW,
+    y2: mid.y / cssH
+  };
+  currentStroke.segments.push(seg);
+
+  prevPoint = p; prevMid = mid;
+}
+function endDraw(e){
+  if(e && e.pointerId && canvas.releasePointerCapture) {
+    try{ canvas.releasePointerCapture(e.pointerId); }catch(_){} 
+  }
+  isDrawing = false;
+  if(currentStroke){
+    strokes.push(currentStroke);
+    localSaveStrokes();
+    currentStroke = null;
+  }
+  prevPoint = prevMid = null;
+}
 
 canvas.addEventListener('pointerdown', startDraw);
 canvas.addEventListener('pointermove', moveDraw);
@@ -209,13 +314,12 @@ canvas.addEventListener('pointerup', endDraw);
 canvas.addEventListener('pointercancel', endDraw);
 canvas.addEventListener('pointerleave', endDraw);
 
-
-
-
 /* ---------------------------
    Sticky (ふせん) system
+   - position saved normalized to CSS coords (0..1)
 ----------------------------*/
 let zCounter = 1000;
+
 function normalizeSavedPosVal(val, axisSize, fallback){
   if(val === undefined || val === null) return fallback || 40;
   if(typeof val === 'number' && val > 0 && val <= 1) return Math.round(val * axisSize);
@@ -224,9 +328,8 @@ function normalizeSavedPosVal(val, axisSize, fallback){
   return parseInt(n || fallback || 40, 10);
 }
 
-/* createSticky enhanced: supports saved.fromSync to avoid double-saving */
 function createSticky(saved){
-  const fromSync = saved?.fromSync === true; // 
+  const fromSync = saved?.fromSync || false;
   const s = document.createElement('div');
   const id = saved?.id || crypto.randomUUID();
   s.dataset.stickyId = id;
@@ -254,25 +357,7 @@ function createSticky(saved){
   const rh = document.createElement('div'); rh.className='resize-handle'; s.appendChild(rh);
   canvasWrap.appendChild(s);
 
-  // sync text edits (if remote available, we will call it from the input handler)
-  content.addEventListener('input', ()=> {
-    // if remote save function is available, call it
-    if (window.__saveStickyToRemote) {
-      const stickyData = {
-        id: s.dataset.stickyId,
-        left: parseInt(s.style.left) || 0,
-        top: parseInt(s.style.top) || 0,
-        width: parseInt(s.style.width) || s.offsetWidth,
-        height: parseInt(s.style.height) || s.offsetHeight,
-        color: s.style.background,
-        textColor: s.style.color,
-        text: content.innerHTML
-      };
-      window.__saveStickyToRemote(stickyData).catch(err => console.warn('saveSticky failed', err));
-    }
-  });
-
-  // selection / z
+  // selection / z-index
   s.addEventListener('pointerdown', (ev)=> {
     if(ev.target.closest('.sticky-controls')) return;
     ev.stopPropagation();
@@ -297,20 +382,9 @@ function createSticky(saved){
   });
   document.addEventListener('pointerup', (ev)=>{
     if(dragging){ dragging=false;
-      // if remote save exists, update remote
-      if (window.__saveStickyToRemote) {
-        const stickyData = {
-          id: s.dataset.stickyId,
-          left: parseInt(s.style.left) || 0,
-          top: parseInt(s.style.top) || 0,
-          width: parseInt(s.style.width) || s.offsetWidth,
-          height: parseInt(s.style.height) || s.offsetHeight,
-          color: s.style.background,
-          textColor: s.style.color,
-          text: s.querySelector('.sticky-content').innerHTML
-        };
-        window.__saveStickyToRemote(stickyData).catch(err=>console.warn('saveSticky update failed', err));
-      }
+      // (no remote DB; just keep local) store prev pos in dataset for potential future use
+      s.dataset.prevLeft = parseInt(s.style.left);
+      s.dataset.prevTop = parseInt(s.style.top);
     }
   });
 
@@ -318,33 +392,17 @@ function createSticky(saved){
   let resizing=false, startW=0, startH=0, startX=0, startY=0;
   rh.addEventListener('pointerdown', (ev)=>{ ev.preventDefault(); ev.stopPropagation(); resizing=true; startW=s.offsetWidth; startH=s.offsetHeight; startX=ev.clientX; startY=ev.clientY; rh.setPointerCapture && rh.setPointerCapture(ev.pointerId); });
   document.addEventListener('pointermove', (ev)=>{ if(!resizing) return; const dx = ev.clientX - startX; const dy = ev.clientY - startY; s.style.width = Math.max(60, startW + dx) + 'px'; s.style.height = Math.max(30, startH + dy) + 'px'; });
-  document.addEventListener('pointerup', (ev)=>{ if(resizing){ resizing=false; if (window.__saveStickyToRemote) { const stickyData = { id: s.dataset.stickyId, left: parseInt(s.style.left)||0, top: parseInt(s.style.top)||0, width: parseInt(s.style.width)||s.offsetWidth, height: parseInt(s.style.height)||s.offsetHeight, color: s.style.background, textColor: s.style.color, text: s.querySelector('.sticky-content').innerHTML }; window.__saveStickyToRemote(stickyData).catch(()=>{}); } } });
+  document.addEventListener('pointerup', (ev)=>{ if(resizing){ resizing=false; } });
 
-  // minimize / close
+  // minimize / close actions
   controls.querySelector('.minBtn').addEventListener('click', (ev)=>{ ev.stopPropagation(); s.classList.toggle('minimized'); });
-  controls.querySelector('.closeBtn').addEventListener('click', (ev)=>{ ev.stopPropagation(); s.remove(); if (window.__deleteStickyRemote) { window.__deleteStickyRemote(s.dataset.stickyId).catch(()=>{}); }});
+  controls.querySelector('.closeBtn').addEventListener('click', (ev)=>{ ev.stopPropagation(); s.remove(); });
 
   return s;
 }
 
 /* UI: add sticky */
-addStickyBtn.addEventListener('click', ()=>{
-  const s = createSticky({});
-  // gather stickyData and save remotely if possible
-  const stickyData = {
-    id: s.dataset.stickyId,
-    left: parseInt(s.style.left) || 0,
-    top: parseInt(s.style.top) || 0,
-    width: parseInt(s.style.width) || s.offsetWidth,
-    height: parseInt(s.style.height) || s.offsetHeight,
-    color: s.style.background,
-    textColor: s.style.color,
-    text: s.querySelector('.sticky-content').innerHTML
-  };
-  if (window.__saveStickyToRemote) {
-    window.__saveStickyToRemote(stickyData).catch(err => console.warn('saveSticky failed', err));
-  }
-});
+addStickyBtn.addEventListener('click', ()=> createSticky({}));
 
 /* toggle memos: hide both canvas strokes and stickies */
 let memoVisible = true;
@@ -359,7 +417,6 @@ clearBtn.addEventListener('click', ()=>{
   strokes = []; localSaveStrokes();
   ctx.clearRect(0,0,canvas.width,canvas.height);
   document.querySelectorAll('.sticky').forEach(s=>s.remove());
-  // optional: remote delete functions can be added to supabase.js and exposed as window.__clearRemote* if desired
 });
 
 /* ---------- load local saved strokes on start ---------- */
@@ -367,89 +424,5 @@ window.addEventListener('load', ()=>{
   setTimeout(()=> { resizeCanvas(); redrawAll(); }, 50);
 });
 </script>
-
-<!-- ========== ここから Supabase 同期の接続（必ず末尾に置く） ========== -->
-<script type="module">
-/*
-  ここで supabase.js から関数を import して購読と送信を行います。
-  supabase.js は以下を export していることを前提:
-    export async function saveStroke(stroke) { ... }
-    export async function saveSticky(sticky) { ... }
-    export function onStrokeChange(callback) { ... }      // 変更通知 (row) をコールバックに渡す
-    export function onStickyChange(callback) { ... }      // 変更通知 (row) をコールバックに渡す
-    export async function deleteSticky(id) { ... }       // (任意) 付箋削除用
-  （もし関数名が違う場合は import 部分を調整してください）
-*/
-
-import { saveStroke, onStrokeChange, saveSticky, onStickyChange } from "./js/supabase.js";
-
-// expose thin wrappers to the non-module code above
-window.__saveStrokeToRemote = async (stroke) => {
-  // Ensure segments are stored as JSON in DB (depends on your schema)
-  try{
-    await saveStroke(stroke);
-  }catch(e){
-    console.warn('remote saveStroke error', e);
-    throw e;
-  }
-};
-
-window.__saveStickyToRemote = async (sticky) => {
-  try{
-    await saveSticky(sticky);
-  }catch(e){
-    console.warn('remote saveSticky error', e);
-    throw e;
-  }
-};
-
-// (optional) if supabase.js exports deleteSticky, expose wrapper (safe fallback if not present)
-try{
-  // subscribe to strokes from other users
-  onStrokeChange((dbRow) => {
-    if(!dbRow) return;
-    // dbRow should be a stroke-like object (id, segments, mode, color, size, time)
-    // avoid duplicates: check by id
-    if (!window.strokes.some(s => s.id === dbRow.id)) {
-    window.strokes.push(dbRow);
-    localSaveStrokes();
-    redrawAll();
-}
-
-  });
-} catch(e){
-  console.warn('subscribe strokes failed', e);
-}
-
-try{
-  // subscribe to stickies from other users
-  onStickyChange((dbRow) => {
-    if(!dbRow) return;
-    const id = dbRow.id || dbRow.id; // adjust if key is different
-    if(document.querySelector(`[data-sticky-id="${id}"]`)) {
-      // already present; could update fields here if you want
-      return;
-    }
-    // create sticky but mark as fromSync to avoid re-saving
-createSticky({
-  id: dbRow.id,
-  fromSync: true,
-  left: dbRow.left,
-  top: dbRow.top,
-  width: dbRow.width,
-  height: dbRow.height,
-  color: dbRow.color,
-  textColor: dbRow.textColor,
-  text: dbRow.text
-});
-
-  });
-} catch(e){
-  console.warn('subscribe stickies failed', e);
-}
-</script>
-<!-- ========== /Supabase同期 ========== -->
-
-<!-- この下に余計なスクリプトは入れないでください -->
 </body>
 </html>
