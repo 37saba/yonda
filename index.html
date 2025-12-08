@@ -296,10 +296,12 @@ canvas.addEventListener('touchmove', e => {
   }
 });
 function startDraw(e){
-  // pointerType が touch で touches.length > 1 の場合は描画中止
-  if(e.pointerType === 'touch' && e.isPrimary === false) return; // 2本目以降の指なら無視
+  // 一本指のみ描画。二本目以降の指は無視
+  if(e.pointerType === 'touch' && !e.isPrimary) return;
+
   e.preventDefault();
   if(e.pointerId && canvas.setPointerCapture) try{ canvas.setPointerCapture(e.pointerId); }catch(_){}
+
   isDrawing = true;
   const p = getPos(e);
   prevPoint = p; prevMid = p;
@@ -307,15 +309,17 @@ function startDraw(e){
 }
 
 function moveDraw(e){
+  // 一本指のみ描画
   if(!isDrawing || !currentStroke) return;
+
   const p = getPos(e);
   const mid = midpoint(prevPoint, p);
 
-  // 描画処理
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
   ctx.lineWidth = Number(penSizeInput.value);
-  if(mode === 'pen'){ ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = penColorInput.value; }
-  else { ctx.globalCompositeOperation = 'destination-out'; }
+  ctx.globalCompositeOperation = (mode==='pen') ? 'source-over' : 'destination-out';
+  ctx.strokeStyle = (mode==='pen') ? penColorInput.value : 'rgba(0,0,0,1)';
   ctx.beginPath();
   ctx.moveTo(prevMid.x, prevMid.y);
   ctx.quadraticCurveTo(prevPoint.x, prevPoint.y, mid.x, mid.y);
@@ -323,33 +327,35 @@ function moveDraw(e){
 
   const rect = canvas.getBoundingClientRect();
   const cssW = rect.width, cssH = rect.height;
-  const seg = {
+  currentStroke.segments.push({
     x1: prevMid.x / cssW,
     y1: prevMid.y / cssH,
     cx: prevPoint.x / cssW,
     cy: prevPoint.y / cssH,
     x2: mid.x / cssW,
     y2: mid.y / cssH
-  };
-  currentStroke.segments.push(seg);
+  });
 
-  prevPoint = p; prevMid = mid;
+  prevPoint = p;
+  prevMid = mid;
 }
 
 function endDraw(e){
+  // 一本指のみ描画終了。二本指ピンチでは currentStroke を破棄しない
   if(!isDrawing) return;
+
   isDrawing = false;
   if(currentStroke){
     strokes.push(currentStroke);
     localSaveStrokes();
-    if (window.__saveStrokeToRemote) {
+    if(window.__saveStrokeToRemote){
       window.__saveStrokeToRemote(currentStroke).catch(err => console.warn('saveStroke remote failed', err));
     }
     currentStroke = null;
   }
+
   prevPoint = prevMid = null;
 }
-
 
 /* ---------------------------
    Sticky (ふせん) system
