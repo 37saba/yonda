@@ -116,7 +116,8 @@ sizeNumber.addEventListener('input', ()=>{ const v = Number(sizeNumber.value); i
 /* ---------------------------
    Stroke storage (normalized) & drawing
 ----------------------------*/
-let strokes = []; // {id, mode, color, size, segments: [{x1,y1,cx,cy,x2,y2}], time}
+let strokes = [];
+window.strokes = strokes; // {id, mode, color, size, segments: [{x1,y1,cx,cy,x2,y2}], time}
 const STROKE_LS_KEY = 'memoStrokes_v1';
 function uid(){ return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8); }
 function localSaveStrokes(){ try{ localStorage.setItem(STROKE_LS_KEY, JSON.stringify(strokes)); }catch(e){console.warn(e);} }
@@ -272,7 +273,7 @@ function normalizeSavedPosVal(val, axisSize, fallback){
 
 /* createSticky enhanced: supports saved.fromSync to avoid double-saving */
 function createSticky(saved){
-  const fromSync = saved?.fromSync || false;
+  const fromSync = saved?.fromSync === true; // 
   const s = document.createElement('div');
   const id = saved?.id || crypto.randomUUID();
   s.dataset.stickyId = id;
@@ -456,11 +457,12 @@ try{
     if(!dbRow) return;
     // dbRow should be a stroke-like object (id, segments, mode, color, size, time)
     // avoid duplicates: check by id
-    if(window.strokes && !window.strokes.find(s=>s.id === dbRow.id)){
-      window.strokes.push(dbRow);
-      localSaveStrokes();
-      redrawAll();
-    }
+    if (!window.strokes.some(s => s.id === dbRow.id)) {
+    window.strokes.push(dbRow);
+    localSaveStrokes();
+    redrawAll();
+}
+
   });
 } catch(e){
   console.warn('subscribe strokes failed', e);
@@ -476,7 +478,18 @@ try{
       return;
     }
     // create sticky but mark as fromSync to avoid re-saving
-    createSticky({ id: id, fromSync: true, left: dbRow.left, top: dbRow.top, width: dbRow.width, height: dbRow.height, color: dbRow.color, textColor: dbRow.textColor, text: dbRow.text });
+createSticky({
+  id: dbRow.id,
+  fromSync: true,
+  left: dbRow.left,
+  top: dbRow.top,
+  width: dbRow.width,
+  height: dbRow.height,
+  color: dbRow.color,
+  textColor: dbRow.textColor,
+  text: dbRow.text
+});
+
   });
 } catch(e){
   console.warn('subscribe stickies failed', e);
