@@ -1,50 +1,130 @@
-// ==========================
-// supabase.js（Supabase 用 正しい版）
-// ==========================
+// supabase.js（差し替え用。ファイルはモジュールとして保存）
+const SUPABASE_URL = window.SUPABASE_URL;
+const SUPABASE_ANON = window.SUPABASE_ANON;
+export const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
-// ① Supabase のクライアント作成
-
-const supabase = window.supabase.createClient(
-  "https://pphwdbxacalkjobjdmhf.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwaHdkYnhhY2Fsa2pvYmpkbWhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5NTc3MDUsImV4cCI6MjA4MDUzMzcwNX0.OF6fzndDhtmrjUn_o9Jg5Fne9eHwSnWzfFT49_Iv6h0"
-);
-
-// ② 匿名ログイン（Supabase Auth）
-async function signIn() {
-  const { data, error } = await supabase.auth.signInAnonymously();
-  if (error) console.error("匿名ログイン失敗:", error);
+// sign-in anonymous (v2)
+export async function signInAnonymously(){
+  const { data, error } = await supabase.auth.signInWithOAuth?.({ provider: 'anonymous' }).catch(()=>({error:'no-op'}));
+  // supabase-js v2 may not have signInAnonymously; fallback: get session user later
+  // We'll still try to get user from supabase.auth.getUser()
+  const userResp = await supabase.auth.getUser();
+  if(userResp.error) {
+    // anonymous sign-in may not be available; ignore but log
+    console.warn('getUser error', userResp.error);
+    return null;
+  }
+  return userResp.data.user ?? null;
 }
 
-signIn();
-
-// ③ strokes（描画線）を保存
-export async function saveStroke(stroke) {
-  const { error } = await supabase.from("strokes").insert(stroke);
-  if (error) console.error("stroke 保存エラー:", error);
+// helper: current user id or null
+async function getUserId(){
+  try{
+    const r = await supabase.auth.getUser();
+    return r?.data?.user?.id ?? null;
+  }catch(e){ return null; }
 }
 
-// ④ stickies（ふせん）を保存
-export async function saveSticky(sticky) {
-  const { error } = await supabase.from("stickies").insert(sticky);
-  if (error) console.error("sticky 保存エラー:", error);
+/*
+  saveStroke(stroke)
+  stroke expected shape (from your index code):
+  {
+    id: "string",
+    color: "#112233",
+    size: 5,
+    mode: "pen" | "eraser",
+    segments: [ { x1:0.1, y1:0.2, cx:..., cy:..., x2:..., y2:... }, ... ],
+    time: 1234567890  // optional - not mapped to DB column
+  }
+*/
+export async function saveStroke(stroke){
+  if(!stroke || !stroke.id) {
+    stroke.id = crypto?.randomUUID?.() || (Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8));
+  }
+  const user_id = await getUserId();
+
+  // Build DB row that matches table columns
+  const row = {
+    id: stroke.id,
+    user_id: user_id,
+    color: stroke.color ?? null,
+    size: Number(stroke.size) || 0,
+    mode: stroke.mode ?? null,
+    segments: stroke.segments ?? [] // jsonb column
+    // created_at は DB 側の default now() に任せる
+  };
+
+  // Use upsert so re-sending same id updates instead of inserting duplicate rows
+  const { data, error } = await supabase.from('strokes').upsert(row, { onConflict: 'id' });
+  if(error) console.error('saveStroke error', error);
+  return { data, error };
 }
 
-// ⑤ strokes のリアルタイム購読
-export function onStrokeChange(callback) {
-  supabase
-    .channel("strokes-realtime")
-    .on("postgres_changes", { event: "*", schema: "public", table: "strokes" }, payload => {
-      callback(payload.new);
+/*
+  saveSticky(sticky)
+  sticky expected shape:
+  {
+    id: "...",
+    left: 120,
+    top: 50,
+    width: 180,
+    height: 110,
+    color: "#fff475",
+    text: "<div>...</div>",
+    textColor: "#000000"
+  }
+*/
+export async function saveSticky(sticky){
+  if(!sticky || !sticky.id) {
+    sticky.id = crypto?.randomUUID?.() || (Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8));
+  }
+  const user_id = await getUserId();
+
+  const row = {
+    id: sticky.id,
+    user_id: user_id,
+    text: sticky.text ?? '',
+    top: Number(sticky.top) || 0,
+    left: Number(sticky.left) || 0,
+    color: sticky.color ?? null,
+    textColor: sticky.textColor ?? sticky.textColor ?? sticky.text_color ?? null,
+    width: Number(sticky.width) || 0,
+    height: Number(sticky.height) || 0
+    // created_at / updated_at handled by DB trigger/defaults if configured
+  };
+
+  const { data, error } = await supabase.from('stickies').upsert(row, { onConflict: 'id' });
+  if(error) console.error('saveSticky error', error);
+  return { data, error };
+}
+
+// subscribe to realtime changes (strokes)
+export function onStrokeChange(cb){
+  // subscribe to INSERT/UPDATE/DELETE; callback gets payload.new (may be null on delete)
+  const chan = supabase.channel('realtime:strokes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'strokes' }, payload => {
+      cb(payload);
     })
     .subscribe();
+
+  return chan;
 }
 
-// ⑥ stickies のリアルタイム購読
-export function onStickyChange(callback) {
-  supabase
-    .channel("stickies-realtime")
-    .on("postgres_changes", { event: "*", schema: "public", table: "stickies" }, payload => {
-      callback(payload.new);
+// subscribe to stickies
+export function onStickyChange(cb){
+  const chan = supabase.channel('realtime:stickies')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'stickies' }, payload => {
+      cb(payload);
     })
     .subscribe();
+
+  return chan;
+}
+
+// optional delete sticky
+export async function deleteSticky(id){
+  if(!id) return;
+  const { data, error } = await supabase.from('stickies').delete().eq('id', id);
+  if(error) console.error('deleteSticky error', error);
+  return { data, error };
 }
