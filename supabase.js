@@ -68,8 +68,17 @@ export async function deleteSticky(id){
 export function onStrokeChange(cb){
   const chan = supabase.channel('realtime:strokes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'strokes' }, payload => {
-      if(!payload) return;
-      // INSERT / UPDATE のみ
+      console.log('[Stroke Payload]', payload);
+      if(payload.new) cb(payload.new);
+    })
+    .subscribe();
+  return chan;
+}
+
+export function onStickyChange(cb){
+  const chan = supabase.channel('realtime:stickies')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'stickies' }, payload => {
+      console.log('[Sticky Payload]', payload);
       if(payload.new) cb(payload.new);
     })
     .subscribe();
