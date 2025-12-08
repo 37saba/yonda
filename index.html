@@ -20,7 +20,7 @@
   /* Canvas is visually below text overlay but above background */
   canvas{position:absolute;left:0;top:0;width:100%;height:100%;touch-action:none;z-index:1;background:transparent}
   /* Text overlay sits on top, pointer-events:none so drawing still works */
-  .text-overlay{position:absolute;inset:0;padding:20px;box-sizing:border-box;writing-mode:vertical-rl;text-orientation:upright;overflow:auto;z-index:20;pointer-events:none}
+  .text-overlay{position:absolute;inset:0;padding:20px;box-sizing:border-box;writing-mode:vertical-rl;text-orientation:upright;overflow:auto;z-index:20; align-items: flex-end; justify-content: flex-start;pointer-events:none}
   .text-overlay .paper{background:transparent;color:#222}
   /* sticky */
   .sticky{position:absolute;z-index:30;display:flex;flex-direction:column;border-radius:8px;box-shadow:0 6px 14px rgba(0,0,0,0.12);min-width:120px;min-height:80px;overflow:hidden;background:#fff475;user-select:none;cursor:grab}
