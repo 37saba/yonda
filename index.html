@@ -89,6 +89,15 @@
 .hide-memos .sticky { opacity: 0 !important; pointer-events: none !important; }
 
 </style>
+<!-- Supabase クライアント読み込み -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- Supabase 初期化（あなたのURL & ANON KEY を書く） -->
+<script>
+  window.SUPABASE_URL = "https://pphwdbxacalkjobjdmhf.supabase.co";
+  window.SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwaHdkYnhhY2Fsa2pvYmpkbWhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ5NTc3MDUsImV4cCI6MjA4MDUzMzcwNX0.OF6fzndDhtmrjUn_o9Jg5Fne9eHwSnWzfFT49_Iv6h0";             
+</script>
+
 </head>
 <body>
 
@@ -424,5 +433,61 @@ window.addEventListener('load', ()=>{
   setTimeout(()=> { resizeCanvas(); redrawAll(); }, 50);
 });
 </script>
+<script type="module" src="./supabase.js"></script>
+<script>
+// ================================
+// Supabase 同期 初期化
+// ================================
+import {
+  saveStrokeToDB,
+  subscribeStrokes,
+  saveStickyToDB,
+  subscribeStickies
+} from "./supabase.js";
+
+// --- strokes の受信（他ユーザーの描画を反映）
+subscribeStrokes(strokeFromDB => {
+  strokes.push(strokeFromDB);
+  localSaveStrokes();
+  redrawAll();
+});
+
+// --- sticky の受信（他ユーザーの付箋を反映）
+subscribeStickies(stickyFromDB => {
+  createSticky(stickyFromDB);
+});
+
+// --- stroke 1本描き終わったら Supabase へ送信
+function endDraw(e){
+  if(e && e.pointerId && canvas.releasePointerCapture){
+    try{ canvas.releasePointerCapture(e.pointerId); }catch(_){}
+  }
+  isDrawing = false;
+  if(currentStroke){
+    strokes.push(currentStroke);
+    localSaveStrokes();
+    saveStrokeToDB(currentStroke);
+    currentStroke = null;
+  }
+  prevPoint = prevMid = null;
+}
+
+// --- sticky 作成時に Supabase へ送信
+addStickyBtn.addEventListener('click', ()=>{
+  const s = createSticky({});
+  const stickyData = {
+    id: s.dataset.stickyId,
+    left: parseInt(s.style.left),
+    top: parseInt(s.style.top),
+    width: parseInt(s.style.width),
+    height: parseInt(s.style.height),
+    color: s.style.background,
+    textColor: s.style.color,
+    text: s.querySelector('.sticky-content').innerHTML
+  };
+  saveStickyToDB(stickyData);
+});
+</script>
+
 </body>
 </html>
